@@ -138,8 +138,9 @@ canvas.fill{width:100%;height:100%;display:block}
           <div><span>Roll</span><b id="vRoll">0.0°</b></div>
           <div><span>Pitch</span><b id="vPitch">0.0°</b></div>
           <div><span>Heading</span><b id="vHead">0°</b></div>
+        <div><span>Brújula</span><b id="vMode" style="font-size:12px">relativa</b></div>
         </div>
-        <div class="hudbtn"><button id="resetYaw">Reset eje Z</button></div>
+        <div class="hudbtn"><button id="northBtn" class="ghost">Norte real</button><button id="resetYaw">Reset eje Z</button></div>
       </div>
     </section>
 
@@ -197,7 +198,7 @@ else { initViewer(); }
    ========================================================= */
 function initPhone() {
   $('pid').value = params.get('id') || '';
-  const last = { o: null, r: [0, 0, 0] };
+  const last = { o: null, r: [0, 0, 0], abs: false };
   let peer = null, conn = null, sensorSeen = false, timer = null, wake = null;
 
   const status = (msg, cls) => { const s = $('pstatus'); s.textContent = msg; s.className = 'pstat ' + (cls || ''); };
@@ -216,14 +217,29 @@ function initPhone() {
       }
     } catch (e) { return status(e.message, 'err'); }
 
-    window.addEventListener('deviceorientation', e => {
+    // Norte real: Android -> 'deviceorientationabsolute'; iOS -> webkitCompassHeading
+    const wrap = v => ((v % 360) + 360) % 360;
+    let gotAbs = false, northOff = null;
+    function handleOri(e, fromAbs) {
       if (e.alpha == null && e.beta == null) return;
+      if (fromAbs) { if (e.alpha == null) return; gotAbs = true; }
+      else if (gotAbs) return;                       // ya hay evento absoluto, ignoro el relativo
       sensorSeen = true;
-      last.o = [e.alpha || 0, e.beta || 0, e.gamma || 0];
-      $('pRoll').textContent = (e.gamma || 0).toFixed(0) + '°';
-      $('pPitch').textContent = (e.beta || 0).toFixed(0) + '°';
-      $('pYaw').textContent = (e.alpha || 0).toFixed(0) + '°';
-    });
+      let a = e.alpha || 0; const b = e.beta || 0, g = e.gamma || 0;
+      let abs = fromAbs || e.absolute === true;
+      if (typeof e.webkitCompassHeading === 'number' && !isNaN(e.webkitCompassHeading)) {
+        const ca = wrap(360 - e.webkitCompassHeading);          // heading (horario) -> alpha (antihorario)
+        if (Math.abs(b) < 35 && Math.abs(g) < 35) northOff = wrap(ca - a);   // calibra con el cel casi plano
+        a = northOff !== null ? wrap(a + northOff) : ca;
+        abs = true;
+      }
+      last.o = [a, b, g]; last.abs = abs;
+      $('pRoll').textContent = g.toFixed(0) + '°';
+      $('pPitch').textContent = b.toFixed(0) + '°';
+      $('pYaw').textContent = a.toFixed(0) + '°' + (abs ? ' N' : '');
+    }
+    window.addEventListener('deviceorientationabsolute', e => handleOri(e, true));
+    window.addEventListener('deviceorientation', e => handleOri(e, false));
     window.addEventListener('devicemotion', e => {
       const r = e.rotationRate;
       if (r) last.r = [r.alpha || 0, r.beta || 0, r.gamma || 0];
@@ -242,7 +258,7 @@ function initPhone() {
         status('Conectado y transmitiendo ✔', 'ok');
         clearInterval(timer);
         timer = setInterval(() => {
-          if (conn.open && last.o) conn.send({ t: Date.now(), o: last.o, r: last.r });
+          if (conn.open && last.o) conn.send({ t: Date.now(), o: last.o, r: last.r, abs: last.abs });
         }, 20); // ~50 Hz
       });
       conn.on('data', d => { if (d && d.ping) conn.send({ pong: d.ping }); });
@@ -257,7 +273,7 @@ function initPhone() {
    ========================================================= */
 function initViewer() {
   /* ---------- estado ---------- */
-  let yawOffset = 0, rawAlpha = 0, firstPacket = true, demo = false;
+  let yawOffset = 0, rawAlpha = 0, firstPacket = true, demo = false, absMode = false;
   const att = { roll: 0, pitch: 0, yaw: 0 };       // yaw ya con offset (antihorario, como alpha)
   const hist = [[], [], []];                          // roll, pitch, yaw (°/s)
   const HN = 300;
@@ -297,6 +313,7 @@ function initViewer() {
     if (d.pong) { $('lat').textContent = Math.round((Date.now() - d.pong) / 2) + ' ms'; return; }
     if (d.o) {
       ppsCount++; lastPacket = performance.now();
+      absMode = !!d.abs;
       setOrientation(d.o[0], d.o[1], d.o[2]);
       if (d.r) pushRates(d.r);
     }
@@ -308,7 +325,7 @@ function initViewer() {
 
   function setOrientation(a, b, g) {
     rawAlpha = a;
-    if (firstPacket) { yawOffset = a; firstPacket = false; }   // arranca con yaw = 0
+    if (firstPacket) { yawOffset = absMode ? 0 : a; firstPacket = false; }   // con brújula: norte real; sin ella: arranca en 0
     const yaw = wrap360(a - yawOffset);
     att.roll = g; att.pitch = b; att.yaw = yaw;
     // W3C: R = Rz(alpha) · Rx(beta) · Ry(gamma)  ->  Euler 'ZXY'
@@ -334,6 +351,7 @@ function initViewer() {
   base.addEventListener('input', updateLink);
   $('copyBtn').onclick = () => { navigator.clipboard && navigator.clipboard.writeText($('link').textContent); $('copyBtn').textContent = '¡Copiado!'; setTimeout(() => $('copyBtn').textContent = 'Copiar link', 1200); };
   $('resetYaw').onclick = () => { yawOffset = rawAlpha; };
+  $('northBtn').onclick = () => { yawOffset = 0; };
   $('demoBtn').onclick = () => {
     demo = !demo; $('demoBtn').textContent = demo ? 'Detener demo' : 'Modo demo';
     if (demo) { setStatus(true, 'Demo'); firstPacket = true; } else setStatus(!!(conn && conn.open), conn && conn.open ? 'Conectado' : 'Esperando celular');
@@ -494,7 +512,7 @@ function initViewer() {
   }
 
   /* ---------- loop ---------- */
-  const vR = $('vRoll'), vP = $('vPitch'), vH = $('vHead');
+  const vR = $('vRoll'), vP = $('vPitch'), vH = $('vHead'), vM = $('vMode');
   function loop() {
     requestAnimationFrame(loop);
     qC.slerp(qT, 0.35);
@@ -504,6 +522,7 @@ function initViewer() {
     vR.textContent = att.roll.toFixed(1) + '°';
     vP.textContent = att.pitch.toFixed(1) + '°';
     vH.textContent = Math.round(wrap360(360 - att.yaw)) + '°';
+    vM.textContent = yawOffset === 0 && absMode ? 'norte real' : (absMode ? 'calibrada' : 'relativa');
     // si dejan de llegar paquetes, cae el estado
     if (!demo && conn && conn.open && lastPacket && performance.now() - lastPacket > 2000) setStatus(true, 'Sin datos…');
   }
