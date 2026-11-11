@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone Flight Configurator</title>
+<style>
+:root{
+  --bg:#2b2b2b; --panel:#363636; --panel2:#444; --line:#1b1b1b;
+  --orange:#ffbb00; --txt:#e8e8e8; --mut:#9b9b9b; --ok:#7bd88f; --bad:#e5534b;
+  --roll:#ffbb00; --pitch:#4fc3f7; --yaw:#8bd450;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+  font-family:"Open Sans","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;font-size:14px}
+button{font:inherit;cursor:pointer;border:0;border-radius:3px;padding:9px 16px;
+  background:var(--orange);color:#222;font-weight:700}
+button:hover{filter:brightness(1.1)}
+button.ghost{background:var(--panel2);color:var(--txt);font-weight:600}
+input{font:inherit;width:100%;background:#262626;border:1px solid #555;color:var(--txt);
+  border-radius:3px;padding:8px 10px}
+label{display:block;font-size:12px;color:var(--mut);margin:10px 0 4px}
+
+/* ---------- VISOR ---------- */
+#viewer{display:flex;flex-direction:column;height:100%}
+header{display:flex;align-items:center;gap:18px;padding:0 18px;height:52px;background:#1f1f1f;
+  border-bottom:3px solid var(--orange);flex:none}
+.logo{font-weight:800;letter-spacing:.5px;font-size:18px}
+.logo b{color:var(--orange)}
+.sp{flex:1}
+.pill{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--mut)}
+.pill b{color:var(--txt);font-weight:600;min-width:42px;display:inline-block}
+.dot{width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.tabs{display:flex;gap:2px;background:#232323;flex:none}
+.tabs div{padding:10px 22px;color:var(--mut);font-size:13px}
+.tabs div.act{background:var(--bg);color:var(--orange);font-weight:700;box-shadow:inset 0 -3px var(--orange)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr 340px;gap:12px;padding:12px}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:4px;display:flex;flex-direction:column;min-height:0}
+.box>h2{margin:0;padding:8px 12px;font-size:12px;letter-spacing:.8px;text-transform:uppercase;
+  background:var(--panel2);border-bottom:1px solid var(--line);color:var(--txt);border-radius:4px 4px 0 0}
+.box>.in{padding:12px;flex:1;min-height:0}
+#qr{background:#fff;padding:8px;width:max-content;margin:10px auto;border-radius:4px;min-width:60px;min-height:60px}
+.small{font-size:12px;color:var(--mut);line-height:1.45}
+.warn{color:var(--orange)}
+.copy{word-break:break-all;font-family:ui-monospace,Consolas,monospace;font-size:12px;
+  background:#262626;padding:7px;border-radius:3px;margin-top:6px}
+#stageBox{position:relative}
+#stage{position:absolute;inset:0;border-radius:0 0 4px 4px;overflow:hidden;cursor:grab;
+  background:radial-gradient(ellipse at 50% 35%,#4a4a4a 0%,#2a2a2a 75%)}
+#stage:active{cursor:grabbing}
+#stage canvas{display:block;width:100%;height:100%}
+#stageBox .in{padding:0;position:relative}
+.hud{position:absolute;left:12px;top:12px;background:rgba(20,20,20,.72);padding:10px 14px;
+  border-radius:4px;border-left:3px solid var(--orange);pointer-events:none;min-width:150px}
+.hud div{display:flex;justify-content:space-between;gap:20px;font-size:13px;padding:2px 0}
+.hud span{color:var(--mut)}
+.hud b{font-family:ui-monospace,Consolas,monospace;font-size:15px}
+.hudbtn{position:absolute;right:12px;top:12px;display:flex;gap:8px}
+.col{display:flex;flex-direction:column;gap:12px;min-height:0}
+.col .box{flex:1}
+canvas.fill{width:100%;height:100%;display:block}
+.legend{display:flex;gap:14px;font-size:12px;margin-bottom:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.gwrap{position:relative;height:calc(100% - 22px)}
+
+/* ---------- CELULAR ---------- */
+#phone{max-width:480px;margin:0 auto;padding:22px 18px;min-height:100%}
+#phone h1{margin:0 0 4px;font-size:22px}
+#phone h1 b{color:var(--orange)}
+#pstart{width:100%;margin-top:16px;padding:14px;font-size:16px}
+.pstat{margin-top:14px;padding:10px 12px;border-radius:4px;background:var(--panel);
+  border-left:4px solid var(--mut);font-size:13px}
+.pstat.ok{border-color:var(--ok)} .pstat.err{border-color:var(--bad)}
+.pvals{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.pvals div{background:var(--panel);border-radius:4px;padding:10px;text-align:center}
+.pvals span{display:block;color:var(--mut);font-size:11px;text-transform:uppercase}
+.pvals b{font-family:ui-monospace,Consolas,monospace;font-size:20px}
+
+@media (max-width:1000px){
+  html,body{height:auto}
+  #viewer{height:auto}
+  main{grid-template-columns:1fr}
+  #stageBox{height:420px}
+  .col .box{min-height:260px}
+}
+</style>
+</head>
+<body>
+
+<!-- ===================== VISOR (PC) ===================== -->
+<div id="viewer">
+  <header>
+    <div class="logo">PHONE<b>FLIGHT</b> <span style="font-weight:400;color:var(--mut);font-size:13px">Configurator</span></div>
+    <div class="sp"></div>
+    <div class="pill"><span class="dot" id="dot"></span><b id="stat">Esperando</b></div>
+    <div class="pill">Paquetes/s <b id="pps">0</b></div>
+    <div class="pill">Latencia <b id="lat">–</b></div>
+  </header>
+  <div class="tabs"><div class="act">Setup</div><div>Sensores</div><div>Receptor</div><div>Motores</div></div>
+
+  <main>
+    <!-- Conexion -->
+    <section class="box">
+      <h2>Conexión</h2>
+      <div class="in" style="overflow:auto">
+        <div class="small">ID del visor</div>
+        <div class="copy" id="myid" style="font-size:18px;color:var(--orange)">…</div>
+
+        <label for="base">URL donde está alojado este archivo (HTTPS)</label>
+        <input id="base" placeholder="https://tuusuario.github.io/phone-flight.html">
+        <div class="small warn" id="httpsWarn" hidden style="margin-top:6px">
+          Los sensores del celular solo funcionan en HTTPS. Subí este archivo a un hosting
+          (GitHub Pages, Netlify, Vercel…) y pegá acá la URL.
+        </div>
+
+        <div id="qr"></div>
+        <div class="small">Escaneá el QR con el celular o abrí:</div>
+        <div class="copy" id="link"></div>
+
+        <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+          <button class="ghost" id="copyBtn">Copiar link</button>
+          <button class="ghost" id="demoBtn">Modo demo</button>
+        </div>
+        <div class="small" style="margin-top:14px">
+          Tip: arrastrá el modelo 3D con el mouse para girar la cámara.
+        </div>
+      </div>
+    </section>
+
+    <!-- 3D -->
+    <section class="box" id="stageBox">
+      <h2>Modelo 3D</h2>
+      <div class="in">
+        <div id="stage"></div>
+        <div class="hud">
+          <div><span>Roll</span><b id="vRoll">0.0°</b></div>
+          <div><span>Pitch</span><b id="vPitch">0.0°</b></div>
+          <div><span>Heading</span><b id="vHead">0°</b></div>
+        </div>
+        <div class="hudbtn"><button id="resetYaw">Reset eje Z</button></div>
+      </div>
+    </section>
+
+    <!-- Instrumentos -->
+    <div class="col">
+      <section class="box">
+        <h2>Horizonte artificial</h2>
+        <div class="in" style="padding:6px"><canvas class="fill" id="att"></canvas></div>
+      </section>
+      <section class="box">
+        <h2>Giroscopio (°/s)</h2>
+        <div class="in">
+          <div class="legend">
+            <span><i style="background:var(--roll)"></i>Roll</span>
+            <span><i style="background:var(--pitch)"></i>Pitch</span>
+            <span><i style="background:var(--yaw)"></i>Yaw</span>
+          </div>
+          <div class="gwrap"><canvas class="fill" id="gyro"></canvas></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<!-- ===================== CELULAR (emisor) ===================== -->
+<div id="phone" hidden>
+  <h1>PHONE<b>FLIGHT</b></h1>
+  <div class="small">Emisor de sensores. Mantené esta pantalla abierta mientras transmitís.</div>
+  <label for="pid">ID del visor</label>
+  <input id="pid" placeholder="bf-xxxxx" autocapitalize="off" autocomplete="off" spellcheck="false">
+  <button id="pstart">Conectar y enviar sensores</button>
+  <div class="pstat" id="pstatus">Listo. Tocá el botón para dar permiso a los sensores.</div>
+  <div class="pvals">
+    <div><span>Roll</span><b id="pRoll">–</b></div>
+    <div><span>Pitch</span><b id="pPitch">–</b></div>
+    <div><span>Yaw</span><b id="pYaw">–</b></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const D2R = Math.PI / 180;
+const params = new URLSearchParams(location.search);
+const isPhone = params.has('id') || params.get('mode') === 'phone';
+
+if (isPhone) { $('viewer').hidden = true; $('phone').hidden = false; initPhone(); }
+else { initViewer(); }
+
+/* =========================================================
+   CELULAR: lee sensores y los manda por PeerJS
+   ========================================================= */
+function initPhone() {
+  $('pid').value = params.get('id') || '';
+  const last = { o: null, r: [0, 0, 0] };
+  let peer = null, conn = null, sensorSeen = false, timer = null, wake = null;
+
+  const status = (msg, cls) => { const s = $('pstatus'); s.textContent = msg; s.className = 'pstat ' + (cls || ''); };
+
+  $('pstart').onclick = async () => {
+    const id = $('pid').value.trim();
+    if (!id) return status('Ingresá el ID del visor.', 'err');
+    try {
+      // iOS exige permiso explícito desde un gesto del usuario
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const p = await DeviceOrientationEvent.requestPermission();
+        if (p !== 'granted') throw new Error('Permiso de sensores denegado');
+        if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+          await DeviceMotionEvent.requestPermission().catch(() => {});
+        }
+      }
+    } catch (e) { return status(e.message, 'err'); }
+
+    window.addEventListener('deviceorientation', e => {
+      if (e.alpha == null && e.beta == null) return;
+      sensorSeen = true;
+      last.o = [e.alpha || 0, e.beta || 0, e.gamma || 0];
+      $('pRoll').textContent = (e.gamma || 0).toFixed(0) + '°';
+      $('pPitch').textContent = (e.beta || 0).toFixed(0) + '°';
+      $('pYaw').textContent = (e.alpha || 0).toFixed(0) + '°';
+    });
+    window.addEventListener('devicemotion', e => {
+      const r = e.rotationRate;
+      if (r) last.r = [r.alpha || 0, r.beta || 0, r.gamma || 0];
+    });
+    setTimeout(() => { if (!sensorSeen) status('No llegan datos del sensor. ¿Estás en HTTPS y con permisos activados?', 'err'); }, 2500);
+
+    try { if ('wakeLock' in navigator) wake = await navigator.wakeLock.request('screen'); } catch (_) {}
+
+    status('Conectando con el visor…');
+    if (peer) peer.destroy();
+    peer = new Peer();
+    peer.on('error', e => status('Error PeerJS: ' + e.type, 'err'));
+    peer.on('open', () => {
+      conn = peer.connect(id, { serialization: 'json' });
+      conn.on('open', () => {
+        status('Conectado y transmitiendo ✔', 'ok');
+        clearInterval(timer);
+        timer = setInterval(() => {
+          if (conn.open && last.o) conn.send({ t: Date.now(), o: last.o, r: last.r });
+        }, 20); // ~50 Hz
+      });
+      conn.on('data', d => { if (d && d.ping) conn.send({ pong: d.ping }); });
+      conn.on('close', () => { clearInterval(timer); status('Conexión cerrada. Tocá el botón para reconectar.', 'err'); });
+      conn.on('error', e => status('Error: ' + e, 'err'));
+    });
+  };
+}
+
+/* =========================================================
+   VISOR: recibe, anima el modelo 3D y dibuja instrumentos
+   ========================================================= */
+function initViewer() {
+  /* ---------- estado ---------- */
+  let yawOffset = 0, rawAlpha = 0, firstPacket = true, demo = false;
+  const att = { roll: 0, pitch: 0, yaw: 0 };       // yaw ya con offset (antihorario, como alpha)
+  const hist = [[], [], []];                          // roll, pitch, yaw (°/s)
+  const HN = 300;
+  let ppsCount = 0, lastPacket = 0;
+
+  /* ---------- PeerJS ---------- */
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const genId = () => 'bf-' + Array.from({ length: 5 }, () => chars[Math.random() * chars.length | 0]).join('');
+  let myId = genId(), peer = null, conn = null, pingTimer = null;
+
+  function startPeer() {
+    peer = new Peer(myId);
+    peer.on('open', id => { $('myid').textContent = id; updateLink(); setStatus(false, 'Esperando celular'); });
+    peer.on('error', e => {
+      if (e.type === 'unavailable-id') { myId = genId(); startPeer(); }
+      else setStatus(false, 'Error: ' + e.type);
+    });
+    peer.on('connection', c => {
+      if (conn && conn.open) conn.close();
+      conn = c; firstPacket = true;
+      c.on('open', () => {
+        demo = false; $('demoBtn').textContent = 'Modo demo';
+        setStatus(true, 'Conectado');
+        clearInterval(pingTimer);
+        pingTimer = setInterval(() => { if (c.open) c.send({ ping: Date.now() }); }, 1000);
+      });
+      c.on('data', onData);
+      c.on('close', () => { clearInterval(pingTimer); setStatus(false, 'Desconectado'); $('lat').textContent = '–'; });
+      c.on('error', () => setStatus(false, 'Error de conexión'));
+    });
+  }
+
+  function setStatus(on, txt) { $('dot').classList.toggle('on', on); $('stat').textContent = txt; }
+
+  function onData(d) {
+    if (!d) return;
+    if (d.pong) { $('lat').textContent = Math.round((Date.now() - d.pong) / 2) + ' ms'; return; }
+    if (d.o) {
+      ppsCount++; lastPacket = performance.now();
+      setOrientation(d.o[0], d.o[1], d.o[2]);
+      if (d.r) pushRates(d.r);
+    }
+  }
+
+  /* ---------- orientación ---------- */
+  const qT = new THREE.Quaternion(), qC = new THREE.Quaternion(), eul = new THREE.Euler();
+  const wrap360 = a => ((a % 360) + 360) % 360;
+
+  function setOrientation(a, b, g) {
+    rawAlpha = a;
+    if (firstPacket) { yawOffset = a; firstPacket = false; }   // arranca con yaw = 0
+    const yaw = wrap360(a - yawOffset);
+    att.roll = g; att.pitch = b; att.yaw = yaw;
+    // W3C: R = Rz(alpha) · Rx(beta) · Ry(gamma)  ->  Euler 'ZXY'
+    eul.set(b * D2R, g * D2R, yaw * D2R, 'ZXY');
+    qT.setFromEuler(eul);
+  }
+  function pushRates(r) {            // r = [alpha(z), beta(x), gamma(y)] en °/s
+    const roll = r[2], pitch = r[1], yaw = r[0];
+    [roll, pitch, yaw].forEach((v, i) => { hist[i].push(v || 0); if (hist[i].length > HN) hist[i].shift(); });
+  }
+
+  /* ---------- UI conexión ---------- */
+  const base = $('base');
+  base.value = location.protocol.startsWith('http') ? location.origin + location.pathname : '';
+  function updateLink() {
+    const b = base.value.trim();
+    $('httpsWarn').hidden = /^https:\/\//i.test(b);
+    const url = b ? b + (b.includes('?') ? '&' : '?') + 'id=' + myId : '(pegá la URL arriba)';
+    $('link').textContent = url;
+    const q = $('qr'); q.innerHTML = '';
+    if (b && window.QRCode) new QRCode(q, { text: url, width: 160, height: 160, colorDark: '#000', colorLight: '#fff' });
+  }
+  base.addEventListener('input', updateLink);
+  $('copyBtn').onclick = () => { navigator.clipboard && navigator.clipboard.writeText($('link').textContent); $('copyBtn').textContent = '¡Copiado!'; setTimeout(() => $('copyBtn').textContent = 'Copiar link', 1200); };
+  $('resetYaw').onclick = () => { yawOffset = rawAlpha; };
+  $('demoBtn').onclick = () => {
+    demo = !demo; $('demoBtn').textContent = demo ? 'Detener demo' : 'Modo demo';
+    if (demo) { setStatus(true, 'Demo'); firstPacket = true; } else setStatus(!!(conn && conn.open), conn && conn.open ? 'Conectado' : 'Esperando celular');
+  };
+  setInterval(() => { $('pps').textContent = ppsCount; ppsCount = 0; }, 1000);
+
+  // generador demo
+  let t0 = performance.now(), prev = [0, 0, 0];
+  setInterval(() => {
+    if (!demo) return;
+    const t = (performance.now() - t0) / 1000;
+    const a = wrap360(t * 25), b = 35 * Math.sin(t * 1.1), g = 50 * Math.sin(t * 0.8);
+    const dt = 0.02;
+    pushRates([ 25, (b - prev[1]) / dt, (g - prev[2]) / dt ]);
+    prev = [a, b, g]; ppsCount++;
+    setOrientation(a, b, g);
+  }, 20);
+
+  /* ---------- 3D ---------- */
+  const stage = $('stage');
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  let camTheta = 0.55, camPhi = 0.32, camR = 5.6;
+  function updateCam() {
+    camera.position.set(camR * Math.sin(camTheta) * Math.cos(camPhi), camR * Math.sin(camPhi) + 0.2, camR * Math.cos(camTheta) * Math.cos(camPhi));
+    camera.lookAt(0, 0, 0);
+  }
+  updateCam();
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.9); dl.position.set(3, 5, 4); scene.add(dl);
+
+  const grid = new THREE.GridHelper(10, 20, 0x777777, 0x3d3d3d); grid.position.y = -1.6; scene.add(grid);
+
+  // etiqueta "N" sobre la grilla (norte = -Z de three)
+  function label(text, color) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'); x.font = 'bold 90px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = color; x.fillText(text, 64, 68);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+    s.scale.set(0.6, 0.6, 1); return s;
+  }
+  const nl = label('N', '#ffbb00'); nl.position.set(0, -1.6, -5.4); scene.add(nl);
+
+  // mundo Z-arriba (convención del sensor) -> Y-arriba de three
+  const world = new THREE.Group(); world.rotation.x = -Math.PI / 2; scene.add(world);
+  const phone = new THREE.Group(); world.add(phone);
+
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.78, 1.62, 0.09),
+    new THREE.MeshStandardMaterial({ color: 0x1c1c1e, metalness: 0.6, roughness: 0.35 }));
+  phone.add(body);
+  phone.add(new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), new THREE.LineBasicMaterial({ color: 0xffbb00 })));
+
+  // pantalla
+  const sc = document.createElement('canvas'); sc.width = 256; sc.height = 540;
+  const sx = sc.getContext('2d');
+  const grad = sx.createLinearGradient(0, 0, 0, 540); grad.addColorStop(0, '#2b2b2b'); grad.addColorStop(1, '#0d0d0d');
+  sx.fillStyle = grad; sx.fillRect(0, 0, 256, 540);
+  sx.fillStyle = '#ffbb00'; sx.beginPath(); sx.moveTo(128, 40); sx.lineTo(168, 100); sx.lineTo(88, 100); sx.closePath(); sx.fill();
+  sx.font = 'bold 34px sans-serif'; sx.textAlign = 'center'; sx.fillText('TOP', 128, 150);
+  sx.font = 'bold 26px sans-serif'; sx.fillStyle = '#e8e8e8'; sx.fillText('PHONE', 128, 300);
+  sx.fillStyle = '#ffbb00'; sx.fillText('FLIGHT', 128, 334);
+  sx.fillStyle = '#000'; sx.beginPath(); sx.arc(128, 22, 8, 0, 7); sx.fill();
+  const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.72, 1.54), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc) }));
+  screen.position.z = 0.0455; phone.add(screen);
+
+  // cámara trasera
+  const bump = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.03), new THREE.MeshStandardMaterial({ color: 0x333338, metalness: 0.5, roughness: 0.4 }));
+  bump.position.set(-0.2, 0.62, -0.06); phone.add(bump);
+  [[-0.27, 0.69], [-0.13, 0.69], [-0.2, 0.55]].forEach(([x, y]) => {
+    const l = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.03, 20), new THREE.MeshStandardMaterial({ color: 0x050510, metalness: 0.9, roughness: 0.1 }));
+    l.rotation.x = Math.PI / 2; l.position.set(x, y, -0.085); phone.add(l);
+  });
+
+  phone.add(new THREE.AxesHelper(1.15));   // X rojo, Y verde (arriba del cel), Z azul (sale de pantalla)
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage); resize();
+
+  // cámara orbital con arrastre
+  let drag = null;
+  stage.addEventListener('pointerdown', e => { drag = [e.clientX, e.clientY]; stage.setPointerCapture(e.pointerId); });
+  stage.addEventListener('pointerup', () => drag = null);
+  stage.addEventListener('pointermove', e => {
+    if (!drag) return;
+    camTheta -= (e.clientX - drag[0]) * 0.008;
+    camPhi = Math.max(-0.2, Math.min(1.4, camPhi + (e.clientY - drag[1]) * 0.006));
+    drag = [e.clientX, e.clientY]; updateCam();
+  });
+  stage.addEventListener('wheel', e => { e.preventDefault(); camR = Math.max(3, Math.min(10, camR + e.deltaY * 0.004)); updateCam(); }, { passive: false });
+
+  /* ---------- canvas 2D helpers ---------- */
+  function prep(c) {
+    const dpr = Math.min(devicePixelRatio, 2), w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== (w * dpr | 0) || c.height !== (h * dpr | 0)) { c.width = w * dpr; c.height = h * dpr; }
+    const x = c.getContext('2d'); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [x, w, h];
+  }
+
+  /* ---------- horizonte artificial ---------- */
+  const attC = $('att');
+  function drawAtt() {
+    const [x, w, h] = prep(attC); if (!w || !h) return;
+    x.clearRect(0, 0, w, h);
+    const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 8, k = r / 50;
+    x.save(); x.beginPath(); x.arc(cx, cy, r, 0, 7); x.clip();
+    x.translate(cx, cy); x.rotate(-att.roll * D2R); x.translate(0, att.pitch * k);
+    x.fillStyle = '#3b7fc2'; x.fillRect(-4 * r, -8 * r, 8 * r, 8 * r);
+    x.fillStyle = '#8b5a2b'; x.fillRect(-4 * r, 0, 8 * r, 8 * r);
+    x.strokeStyle = '#fff'; x.lineWidth = 2; x.beginPath(); x.moveTo(-4 * r, 0); x.lineTo(4 * r, 0); x.stroke();
+    x.fillStyle = '#fff'; x.font = '11px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 1.5;
+    for (let p = -90; p <= 90; p += 10) {
+      if (!p) continue;
+      const len = p % 20 === 0 ? 0.3 * r : 0.16 * r, y = -p * k;
+      x.beginPath(); x.moveTo(-len, y); x.lineTo(len, y); x.stroke();
+      if (p % 20 === 0) { x.fillText(Math.abs(p), len + 14, y); x.fillText(Math.abs(p), -len - 14, y); }
+    }
+    x.restore();
+    // aro y símbolo fijo
+    x.strokeStyle = '#1b1b1b'; x.lineWidth = 6; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.stroke();
+    x.strokeStyle = '#ffbb00'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(cx - 0.45 * r, cy); x.lineTo(cx - 0.15 * r, cy); x.lineTo(cx - 0.15 * r, cy + 0.07 * r);
+    x.moveTo(cx + 0.45 * r, cy); x.lineTo(cx + 0.15 * r, cy); x.lineTo(cx + 0.15 * r, cy + 0.07 * r); x.stroke();
+    x.fillStyle = '#ffbb00'; x.beginPath(); x.arc(cx, cy, 3, 0, 7); x.fill();
+    // marcador de roll
+    x.save(); x.translate(cx, cy); x.rotate(-att.roll * D2R);
+    x.fillStyle = '#ffbb00'; x.beginPath(); x.moveTo(0, -r + 4); x.lineTo(-7, -r + 18); x.lineTo(7, -r + 18); x.closePath(); x.fill(); x.restore();
+  }
+
+  /* ---------- gráfico gyro ---------- */
+  const gC = $('gyro'), COL = ['#ffbb00', '#4fc3f7', '#8bd450'], RANGE = 500;
+  function drawGyro() {
+    const [x, w, h] = prep(gC); if (!w || !h) return;
+    x.clearRect(0, 0, w, h);
+    x.fillStyle = '#262626'; x.fillRect(0, 0, w, h);
+    x.font = '10px sans-serif'; x.textBaseline = 'middle';
+    [-RANGE, -RANGE / 2, 0, RANGE / 2, RANGE].forEach(v => {
+      const y = h / 2 - v / RANGE * (h / 2 - 6);
+      x.strokeStyle = v === 0 ? '#666' : '#3a3a3a'; x.lineWidth = 1;
+      x.beginPath(); x.moveTo(0, y); x.lineTo(w, y); x.stroke();
+      x.fillStyle = '#777'; x.fillText(v, 3, y - 7);
+    });
+    hist.forEach((arr, i) => {
+      x.strokeStyle = COL[i]; x.lineWidth = 1.6; x.beginPath();
+      arr.forEach((v, j) => {
+        const px = w - (arr.length - 1 - j) * (w / HN);
+        const py = h / 2 - Math.max(-RANGE, Math.min(RANGE, v)) / RANGE * (h / 2 - 6);
+        j ? x.lineTo(px, py) : x.moveTo(px, py);
+      });
+      x.stroke();
+    });
+  }
+
+  /* ---------- loop ---------- */
+  const vR = $('vRoll'), vP = $('vPitch'), vH = $('vHead');
+  function loop() {
+    requestAnimationFrame(loop);
+    qC.slerp(qT, 0.35);
+    phone.quaternion.copy(qC);
+    renderer.render(scene, camera);
+    drawAtt(); drawGyro();
+    vR.textContent = att.roll.toFixed(1) + '°';
+    vP.textContent = att.pitch.toFixed(1) + '°';
+    vH.textContent = Math.round(wrap360(360 - att.yaw)) + '°';
+    // si dejan de llegar paquetes, cae el estado
+    if (!demo && conn && conn.open && lastPacket && performance.now() - lastPacket > 2000) setStatus(true, 'Sin datos…');
+  }
+  loop();
+
+  startPeer();
+}
+</script>
+</body>
+</html>
